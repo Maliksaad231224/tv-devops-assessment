@@ -23,6 +23,11 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.0"
+
       - name: Install cdktf CLI
         run: npm install -g cdktf-cli@0.20.12
 
