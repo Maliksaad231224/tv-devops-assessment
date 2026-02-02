@@ -66,15 +66,28 @@ jobs:
           
           terraform init -reconfigure
           
-          # Import existing resources if they exist but not in state
-          aws iam get-role --role-name "${{ env.APP_NAME }}-task-role" && \
-            terraform import aws_iam_role.ecsTaskRole "${{ env.APP_NAME }}-task-role" || true
+          # Only import resources if they exist in AWS but NOT in state
+          # Check state first to avoid "already managed" errors
           
-          SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=${{ env.APP_NAME }}-sg" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null)
-          [ "$SG_ID" != "None" ] && [ -n "$SG_ID" ] && terraform import aws_security_group.ecsSg "$SG_ID" || true
+          if ! terraform state show aws_iam_role.ecsTaskRole >/dev/null 2>&1; then
+            aws iam get-role --role-name "${{ env.APP_NAME }}-task-role" >/dev/null 2>&1 && \
+              terraform import aws_iam_role.ecsTaskRole "${{ env.APP_NAME }}-task-role" || true
+          fi
           
-          aws ecs describe-clusters --clusters "${{ env.APP_NAME }}-cluster" --query "clusters[?status=='ACTIVE'].clusterName" --output text | grep -q "${{ env.APP_NAME }}" && \
-            terraform import aws_ecs_cluster.cluster "${{ env.APP_NAME }}-cluster" || true
+          if ! terraform state show aws_security_group.ecsSg >/dev/null 2>&1; then
+            SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=${{ env.APP_NAME }}-sg" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null)
+            [ "$SG_ID" != "None" ] && [ -n "$SG_ID" ] && terraform import aws_security_group.ecsSg "$SG_ID" || true
+          fi
+          
+          if ! terraform state show aws_ecs_cluster.cluster >/dev/null 2>&1; then
+            aws ecs describe-clusters --clusters "${{ env.APP_NAME }}-cluster" --query "clusters[?status=='ACTIVE'].clusterName" --output text 2>/dev/null | grep -q "${{ env.APP_NAME }}" && \
+              terraform import aws_ecs_cluster.cluster "${{ env.APP_NAME }}-cluster" || true
+          fi
+          
+          if ! terraform state show aws_ecs_service.service >/dev/null 2>&1; then
+            aws ecs describe-services --cluster "${{ env.APP_NAME }}-cluster" --services "${{ env.APP_NAME }}-service" --query "services[?status=='ACTIVE'].serviceName" --output text 2>/dev/null | grep -q "${{ env.APP_NAME }}" && \
+              terraform import aws_ecs_service.service "${{ env.APP_NAME }}-cluster/${{ env.APP_NAME }}-service" || true
+          fi
           
           terraform apply -auto-approve
 
