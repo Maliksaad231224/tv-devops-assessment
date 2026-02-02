@@ -1,4 +1,4 @@
-import { App, TerraformStack } from 'cdktf';
+import { App, TerraformStack, S3Backend } from 'cdktf';
 import { Construct } from 'constructs';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
@@ -14,8 +14,15 @@ export class SimpleEcsStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
+    // S3 Backend for remote state
+    new S3Backend(this, {
+      bucket: process.env.APP_NAME ? `${process.env.APP_NAME}-terraform-state` : 'typescriptapp-terraform-state',
+      key: 'terraform.tfstate',
+      region: process.env.AWS_REGION || 'eu-north-1',
+    });
+
     // 1️⃣ AWS provider
-    new AwsProvider(this, 'AWS', { region: 'eu-north-1' });
+    new AwsProvider(this, 'AWS', { region: process.env.AWS_REGION || 'eu-north-1' });
 
     const defaultVpc = new DataAwsVpc(this, 'defaultVpc', { default: true });
     const defaultSubnets = new DataAwsSubnets(this, 'defaultSubnets', {
@@ -97,7 +104,7 @@ export class SimpleEcsStack extends TerraformStack {
         dependsOn: [cluster],
       networkConfiguration: {
         assignPublicIp: true,
-        
+
         subnets: defaultSubnets.ids,
         securityGroups: [sg.id],
       },
