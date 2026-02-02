@@ -159,6 +159,11 @@ git commit -m "Deploy to ECS"
 git push origin main
 ```
 
+
+## ⚠️ Remote State S3 Bucket Required
+
+Before running the GitHub Actions workflow or deploying with CDKTF, you must create the S3 bucket specified in your remote backend configuration. This bucket is used to store the Terraform state file and is required for successful deployments. The bucket name and region should match those configured in your IAC stack and workflow.
+
 ## Important Configuration Details
 
 - **AWS Account ID**: `090618480202`

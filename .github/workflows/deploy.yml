@@ -46,6 +46,19 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Configure remote backend
+        working-directory: IAC
+        run: |
+          cat > backend.tf << EOF
+          terraform {
+            backend "s3" {
+              bucket = "${{ env.APP_NAME }}-terraform-state"
+              key    = "terraform.tfstate"
+              region = "${{ env.AWS_REGION }}"
+            }
+          }
+          EOF
+
       - name: Synthesize cdktf
         working-directory: IAC
         run: npx cdktf synth
