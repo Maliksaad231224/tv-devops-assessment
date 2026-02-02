@@ -26,7 +26,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "~1.0"
+          terraform_version: "1.6.6"
 
       - name: Install cdktf CLI
         run: npm install -g cdktf-cli@0.20.12
@@ -46,22 +46,35 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Configure remote backend
-        working-directory: IAC
-        run: |
-          cat > backend.tf << EOF
-          terraform {
-            backend "s3" {
-              bucket = "${{ env.APP_NAME }}-terraform-state"
-              key    = "terraform.tfstate"
-              region = "${{ env.AWS_REGION }}"
-            }
-          }
-          EOF
-
+     
       - name: Synthesize cdktf
         working-directory: IAC
         run: npx cdktf synth
+
+      - name: Import existing resources
+        working-directory: IAC/cdktf.out/stacks/${{ env.APP_NAME }}-stack
+        continue-on-error: true
+        run: |
+          terraform init -reconfigure \
+            -backend-config="bucket=${{ env.APP_NAME }}-terraform-state" \
+            -backend-config="key=terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}"
+          
+          # Import IAM role if it exists
+          if aws iam get-role --role-name "${{ env.APP_NAME }}-task-role" >/dev/null 2>&1; then
+            terraform import aws_iam_role.ecsTaskRole "${{ env.APP_NAME }}-task-role" || true
+          fi
+          
+          # Get and import security group if it exists
+          SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=${{ env.APP_NAME }}-sg" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || echo "")
+          if [ -n "$SG_ID" ] && [ "$SG_ID" != "None" ]; then
+            terraform import aws_security_group.ecsSg "$SG_ID" || true
+          fi
+          
+          # Import ECS cluster if it exists
+          if aws ecs describe-clusters --clusters "${{ env.APP_NAME }}-cluster" --query "clusters[0].clusterArn" --output text 2>/dev/null | grep -q "arn:aws"; then
+            terraform import aws_ecs_cluster.cluster "${{ env.APP_NAME }}-cluster" || true
+          fi
 
       - name: Deploy infrastructure
         working-directory: IAC
