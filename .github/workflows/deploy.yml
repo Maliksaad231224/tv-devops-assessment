@@ -24,7 +24,7 @@ jobs:
           node-version: '20'
 
       - name: Install cdktf CLI
-        run: npm install -g cdktf-cli
+        run: npm install -g cdktf-cli@0.20.12
 
       - name: Install IAC dependencies
         working-directory: IAC
